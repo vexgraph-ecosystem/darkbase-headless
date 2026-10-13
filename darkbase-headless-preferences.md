@@ -21,6 +21,7 @@ Read it first, then this file, `../../tests/test-preferences.md`, the current
 | Step-Up For Destructive Operations Law | Admin/destructive authorization | Password re-entry per destructive request; no cached credentials |
 | Sensitive Field Law | Field-level protection | Sensitivity declared on the field; service-side enforcement; explicit withholding |
 | Elevation Law (Time-Boxed Step-Up) | Presence proof and its window | Per-session elevation, bounded window, rate-limited, recovery codes |
+| Authenticator Enrolment Law (TOTP) | Second factor and its primitives | RFC 6238 interop, gated enrolment, recoverable secret, replay rejection |
 
 ### Headless Service Boundary Law
 
@@ -181,6 +182,47 @@ the device right now. That is the property a stolen token cannot fake.
 8. **The authenticator secret is recoverable by the service** (unlike a password hash), so the
    store itself is part of the trust boundary. That must be stated wherever this is described,
    never implied away.
+
+### Authenticator Enrolment Law (TOTP)
+
+#### Definition:
+The second factor is **TOTP** (RFC 6238 over RFC 4226): a shared per-user secret plus a
+time-derived 6-digit code. There is **no vendor integration** — Google Authenticator, Authy,
+Apple Passwords, 1Password and every other app implement the same two RFCs and the same
+`otpauth://` setup URI. Enrolment shows that URI once (as QR and as base32 text); verification
+recomputes the code from the stored secret.
+
+#### The Why:
+The reason one enrolment works in every app is that none of them is a service to connect to.
+Treating "integrate with Authy/Google/Apple" as a connector problem would build phantom work:
+there is no vendor API in the middle, no OAuth, and nothing to poll. The interop surface is the
+RFC and the setup URI, and that surface is stable precisely because it is not owned by anyone.
+
+#### The Rule:
+1. **Interop is the RFC, not a vendor.** HMAC-SHA1, 6 digits, 30-second step, the
+   `otpauth://totp/<issuer>:<account>?secret=<base32>&issuer=<issuer>` setup URI. No per-app code
+   path, ever.
+2. **Enrolment is itself protected.** Enrolling or replacing an authenticator requires the
+   password (Step-Up For Destructive Operations Law). A stolen session that could silently enrol
+   an attacker's device would permanently *own* step-up for that account — this is the single
+   most dangerous hole in the whole scheme, and it is closed by gating enrolment.
+3. **The secret is stored so the service can read it** (unlike a password hash), which makes the
+   store part of the trust boundary. It is therefore stored **encrypted**, with the key held
+   outside the database file, and that fact is stated wherever this is described.
+4. **Recovery codes are issued at enrolment**, shown exactly once, stored only as **hashes**, and
+   each is **single-use**. "I lost my phone" must never mean "I lost my database".
+5. **Verification accepts a bounded window** (default ±1 step, for clock skew) and **rejects
+   replay**: the last accepted timestep per user is remembered, and a code at or before it is
+   refused for the rest of its validity. A 30-second code with tolerance is otherwise reusable
+   for up to ~90 seconds by anyone who saw it.
+6. **Failed verifications are rate-limited and auditable**, like every other elevation failure.
+7. **Primitives are borrowed, never invented.** HMAC and the constant-time compare come from the
+   R2 CPU crypto contract; base32 and the QR *encode* are pure byte-to-byte format algorithms
+   (Pure Format Algorithm Law) — a decoder already exists in spirit, an encoder is its sibling.
+   Drawing the QR belongs to whichever surface shows it (terminal cells, or an image).
+8. **No connector is required.** An SMS or e-mail delivery fallback *would* be a third-party API
+   and therefore an R3 connector shape — but that is a weaker factor than TOTP and must not be the
+   default path.
 
 ### Injected Transport Law
 
