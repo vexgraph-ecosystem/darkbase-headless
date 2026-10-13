@@ -19,6 +19,8 @@ Read it first, then this file, `../../tests/test-preferences.md`, the current
 | Admin Out-of-Band Law | Setup and schema modification | Setup absent from consumer code; admin ops owned here |
 | Entity-Scoped Permission Law | Authorization model | Grants live on entities; role resolution and deny-by-default owner tests |
 | Step-Up For Destructive Operations Law | Admin/destructive authorization | Password re-entry per destructive request; no cached credentials |
+| Sensitive Field Law | Field-level protection | Sensitivity declared on the field; service-side enforcement; explicit withholding |
+| Elevation Law (Time-Boxed Step-Up) | Presence proof and its window | Per-session elevation, bounded window, rate-limited, recovery codes |
 
 ### Headless Service Boundary Law
 
@@ -82,8 +84,9 @@ single read, not a reasoning exercise.
 4. **Every catalog object carries a declared, stable id** — database, entity, user, role — distinct
    from its name, so renaming never breaks a grant or an audit trail. Ids are declared, never
    derived from position.
-5. **No per-row or per-field rights in v1.** If a future version adds them, they extend this law;
-   they do not create a second, overlapping source of truth.
+5. **Field sensitivity is not a right.** It is a flag on the field (the Sensitive Field Law) that
+   requires elevation; grants stay on entities. Two different concerns, one place each — never a
+   second, overlapping source of truth for the same question.
 6. **Authorization is per request**, computed from the session's user, and never cached across a
    grant change.
 
@@ -116,6 +119,68 @@ second proof off the wire until the moment it is needed is what makes a breach s
    everything. Step-up requires either TLS or an explicit, documented trusted-network-only claim.
 6. **Admin overhead is by design, not an oversight.** Extra friction on destructive operations is
    the intended cost of a breach being survivable.
+
+### Sensitive Field Law
+
+#### Definition:
+A field may be declared **sensitive** — a flag on the field itself, exactly like `KEY`, declared
+beside offset and size. Reading or writing a sensitive field requires an **elevated** session
+(the Elevation Law). The **service** enforces it at the boundary: sensitive bytes are never sent
+to a session that is not elevated.
+
+#### The Why:
+Protection belongs where the data is, so it cannot drift from it. Declaring sensitivity on the
+field means the schema is the single answer to "is this protected?", the same way the layout is
+the single answer to "where is this?" — no separate permissions table to fall out of sync, no
+per-request option to forget. And enforcement has to be service-side: a client that hides a field
+locally is a display choice, not a control, and anyone talking to the service directly sees it
+anyway.
+
+#### The Rule:
+1. **Sensitivity is a flag on the `Field`**, declared like `offset`, `size` and `KEY`. Never a
+   per-request option, never a client-side filter.
+2. **The service enforces it.** Bytes of a non-elevated sensitive field never leave the process.
+3. **A direct read of a sensitive field without elevation refuses** with a *distinct* status, so a
+   UI can ask for elevation rather than showing a generic denial.
+4. **A whole-row projection never silently drops it.** It either refuses, or includes the field
+   **explicitly marked as withheld**. A reader must never mistake "withheld" for "empty" — silent
+   redaction is the same defect as silent exhaustion.
+5. **Sensitivity gates writing too.** Setting a sensitive field requires elevation by the same rule.
+6. **No per-row sensitivity in v1.** If a future version adds it, it extends this law; the
+   declaration stays on the field, not in a second table.
+
+### Elevation Law (Time-Boxed Step-Up)
+
+#### Definition:
+**Elevation** is a per-session, time-boxed state proving a human is present *now*. It is obtained
+with the password plus an authenticator code, lasts a bounded window (**15 minutes** by default,
+configurable), and unlocks destructive operations and sensitive-field access. When it expires, the
+session returns to ordinary access with no further ceremony.
+
+#### The Why:
+Re-prompting on every single call makes a control unusable, and an unusable control protects
+nothing — people route around it, or switch it off. A bounded window is the same trade `sudo`
+makes (its default re-prompt interval is 15 minutes, for the same reason). What elevation actually
+proves is *presence*: the session token says who you are, the elevation says a human is holding
+the device right now. That is the property a stolen token cannot fake.
+
+#### The Rule:
+1. **Per-session, never global.** Elevating one session must not elevate another.
+2. **Password + authenticator**, verified once, then discarded (Step-Up For Destructive Operations
+   Law). The code is checked against a window, never stored.
+3. **Time-boxed, default 15 minutes**, and it expires back to ordinary access silently. The
+   authenticator code itself rotates on its own shorter schedule; the window is the elevation's,
+   not the code's.
+4. **Required for:** destructive operations (drop, delete, grants, users, tokens) and sensitive-field
+   read or write.
+5. **Not required for:** ordinary reads and writes, so the friction lands only where damage or
+   exposure would.
+6. **Failed attempts are rate-limited and auditable**; a burst is a signal.
+7. **Recovery must exist.** One-time backup codes are issued at enrolment, because "I lost my
+   phone" must not mean "I lost my database".
+8. **The authenticator secret is recoverable by the service** (unlike a password hash), so the
+   store itself is part of the trust boundary. That must be stated wherever this is described,
+   never implied away.
 
 ### Injected Transport Law
 
