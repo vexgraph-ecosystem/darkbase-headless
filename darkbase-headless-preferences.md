@@ -17,6 +17,8 @@ Read it first, then this file, `../../tests/test-preferences.md`, the current
 | Injected Transport Law | Socket ownership and bounded progress | fn-table seam, host-driven bounded polls, no threads |
 | Request and Send Law | Wire shape, versioning and failure channel | Framing/status/version-mismatch owner tests |
 | Admin Out-of-Band Law | Setup and schema modification | Setup absent from consumer code; admin ops owned here |
+| Entity-Scoped Permission Law | Authorization model | Grants live on entities; role resolution and deny-by-default owner tests |
+| Step-Up For Destructive Operations Law | Admin/destructive authorization | Password re-entry per destructive request; no cached credentials |
 
 ### Headless Service Boundary Law
 
@@ -54,6 +56,66 @@ own the store's and reduces this repository to decoration.
   R2 CPU crypto contract; never invent a hash. Store only the hash of a refresh token.
 - **Redaction.** Tokens and credential material never appear in logs, diagnostics or
   `toString` projections. Comparisons of secret material do not early-exit.
+
+### Entity-Scoped Permission Law
+
+#### Definition:
+Authorization is **entity-scoped**. A **role is only a label** attached to a user — it carries
+no rights of its own. A **grant** is a row of `(roleId, entity, rights)`, where rights is a
+bitmask (at minimum READ, WRITE, DELETE), and it is the only place a permission lives. A
+request is authorized by resolving user → roles → that user's grants for the target entity,
+and comparing against the right the operation needs.
+
+#### The Why:
+One permission, one place. The model this deliberately is *not* is Discord's, where a role and
+a per-object overwrite are two things that can contradict each other and the answer depends on
+evaluation order. When two places can grant the same right, every audit becomes a simulation of
+the resolver. Here there is exactly one place, which makes "who can do what to this table" a
+single read, not a reasoning exercise.
+
+#### The Rule:
+1. **Rights attach to entities, never to roles.** A role is a label; adding a right to a role
+   is a defect.
+2. **Deny by default.** No grant means no access. An unknown user, role, entity or right rejects
+   with an explicit status — never a silent allow.
+3. **One grant per (role, entity).** Re-registering replaces; it never accumulates.
+4. **Every catalog object carries a declared, stable id** — database, entity, user, role — distinct
+   from its name, so renaming never breaks a grant or an audit trail. Ids are declared, never
+   derived from position.
+5. **No per-row or per-field rights in v1.** If a future version adds them, they extend this law;
+   they do not create a second, overlapping source of truth.
+6. **Authorization is per request**, computed from the session's user, and never cached across a
+   grant change.
+
+### Step-Up For Destructive Operations Law
+
+#### Definition:
+Operations that destroy or reshape data require the **password again**, carried in that request.
+A valid session token is never sufficient on its own. The password is verified against the stored
+slow hash and then **discarded** — never cached, never logged, never stored in the session.
+
+#### The Why:
+A session token is the thing most likely to be stolen: it sits in RAM, it travels on every
+request, and it lasts. If possession of that token is enough to drop a table, then any breach of
+the token table — or any stolen session — hands over the ability to destroy the data itself. The
+token proves *who you are*; the password proves *you are still the one holding it*. Keeping the
+second proof off the wire until the moment it is needed is what makes a breach survivable.
+
+#### The Rule:
+1. **Destructive and shape-changing operations require the password in the request.** At minimum:
+   dropping an entity, deleting rows, changing grants, creating or removing users, and rotating
+   or revoking tokens.
+2. **Verify, then discard.** The password is checked against the stored slow hash and dropped
+   immediately. It is never written into the session, the log, a projection or a diagnostic.
+3. **A failed step-up refuses with an explicit status** and is itself auditable. Repeated failures
+   are rate-limited; a burst of them is a signal, not noise.
+4. **Reads and ordinary writes never require it.** Step-up is for destruction, not for use — the
+   cost is paid exactly where the damage would be.
+5. **The transport decision is load-bearing.** A step-up password crosses the wire, so a plaintext
+   transport is *worse* than no step-up at all: it would expose the credential that protects
+   everything. Step-up requires either TLS or an explicit, documented trusted-network-only claim.
+6. **Admin overhead is by design, not an oversight.** Extra friction on destructive operations is
+   the intended cost of a breach being survivable.
 
 ### Injected Transport Law
 
