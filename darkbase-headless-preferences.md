@@ -242,6 +242,24 @@ service version independently, a mismatched pair is a new failure mode that a
 single-repository design never had. **One request at a time per connection**; multiple
 connections instead of multiplexing, until ordering guarantees are designed.
 
+The first envelope implementation is `protocol/headless_protocol.{h,c}`; the
+normative byte layout is in `docs/wire-protocol.md`. V1 has a four-byte length
+prefix followed by version/kind/operation/status/request-id and opaque payload,
+all explicitly little-endian. Total frames are bounded at 65536 bytes for hostile
+input safety; host backing is selected cold. A connection owner admits one frame
+and retains coalesced tail bytes with the caller. Malformed/oversize/truncated
+streams fail closed until an explicit new-stream reset; never scan for a new
+header. An admitted envelope is not authentication or authority to execute.
+Response statuses are vocabulary; no dispatcher or admin action is connected yet.
+The host must send a full response before release and owns deadlines, transport
+security and connection authorization. No real socket or TLS proof is implied.
+
+Frame backing, counts and ready/failure state mutate through constructor/feed/
+release/reset only, a scoped managed accessor exception under the Conflict Triage
+Law and Single Class Per File Law (Java Law), preserving initialized-byte and
+borrow truth. Safe getters and redacted projections exist; direct field mutation
+is outside contract. Capacity refusals report once/count always until reset.
+
 ### Admin Out-of-Band Law
 
 Setup and schema modification — create database, create entity, add user, browse the
@@ -266,8 +284,14 @@ unproved.
 
 This slice uses the engine's existing flat snapshot API for admin/replay/gate state.
 It does not implement the approved WAL-backed mutation/audit direction, network
-transport, per-client access/refresh sessions, request framing, CRUD, triggers or
+transport, per-client access/refresh sessions, CRUD, triggers or
 redacted audit. A process-local authenticated boolean is not a client session or a
 network authorization system. Keychain integration, startup/save failure injection,
 diagnostic assertions, sanitizers and non-macOS platforms remain proof gaps. No push,
 live provider call, socket acquisition or real credential use is implied.
+
+The transport-independent protocol owner adds byte-level framing proof separately
+from the service. Its strict optimized and ASan/UBSan runner exercises hostile
+headers, splits, EOF, bounds/exhaustion, preservation and recovery. Service-level
+sanitizer/failure-injection gaps above are unchanged. Transport and real network
+request execution remain unimplemented.
