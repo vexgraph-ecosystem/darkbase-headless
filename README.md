@@ -10,9 +10,10 @@ second owner of the store.
 **Role:** R4 interface. Borrows R2 (`vexspoke`, `relational-engine`) and R3
 (`darkbase-engine`, `api-haven`, `sesh`); is consumed by R5 applications.
 
-**Nothing is implemented yet.** The repository holds its constitution link, lawbook,
-LICENSE and ignore list — no source, no build target, no tests. Everything below is
-specified intent, not delivered behavior.
+**No service behavior is implemented yet.** The repository holds its constitution
+link, lawbook, LICENSE and ignore list — no source or tests. The workspace now has
+a source-conditional target registrar; because `src/` is empty, it emits no library
+or test target. Everything below is specified intent, not delivered behavior.
 
 Specified, not built: the connection descriptor (endpoint + credential + database),
 the session model (access token in RAM, durable refresh token), per-request
