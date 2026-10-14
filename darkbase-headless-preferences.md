@@ -252,6 +252,22 @@ connects and uses what is already there.
 
 ## Current Proof Boundary
 
-Nothing here is implemented; this lawbook establishes the accepted contract only. Owner
-tests belong in `../../tests/darkbase-headless/` once source exists. No push, live
-provider call, socket acquisition or credential use is implied by this document.
+`src/service/service.{h,c}` implements an initial offline service owner: it owns one
+engine Database, registers the private admin row schema before loading, keeps request
+admission closed at startup, and supports one-time bootstrap, password + TOTP login,
+TOTP replay-step persistence, forced password replacement and explicit request-gate
+enable/disable. The TOTP secret crosses a borrowed secret-store callback only; that
+callback must be backed by secure OS storage and there is no plaintext fallback.
+The registered owner `../../tests/darkbase-headless/service/service_test.c` passed
+on macOS arm64 through the workspace graph, covering bootstrap, login, replay,
+password-change gating and restart with an in-memory fake secret store. These claims
+remain scoped to that test; save/load failure injection and Keychain behavior are
+unproved.
+
+This slice uses the engine's existing flat snapshot API for admin/replay/gate state.
+It does not implement the approved WAL-backed mutation/audit direction, network
+transport, per-client access/refresh sessions, request framing, CRUD, triggers or
+redacted audit. A process-local authenticated boolean is not a client session or a
+network authorization system. Keychain integration, startup/save failure injection,
+diagnostic assertions, sanitizers and non-macOS platforms remain proof gaps. No push,
+live provider call, socket acquisition or real credential use is implied.

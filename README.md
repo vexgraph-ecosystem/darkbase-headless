@@ -1,34 +1,51 @@
 # darkbase-headless — the R4 darkbase service
 
-The headless client and service for [darkbase-engine](../../drivers/darkbase-engine):
-it owns identity, sessions and the request/send surface, and it is the only thing that
-opens a database file. The graphical/TUI application is a **client of this**, not a
-second owner of the store.
+The headless service for [darkbase-engine](../../drivers/darkbase-engine): it owns
+database startup and file access, one admin's bootstrap/authentication and the
+current process-local request gate. Sessions and the request/send surface remain
+planned. The graphical/TUI application is a **client of this**, not a second owner
+of the store.
 
 ## Current State
 
-**Role:** R4 interface. Borrows R2 (`vexspoke`, `relational-engine`) and R3
-(`darkbase-engine`, `api-haven`, `sesh`); is consumed by R5 applications.
+**Role:** R4 interface. Current service source borrows R2 (`vexspoke`,
+`relational-engine`) and R3 `darkbase-engine`; API Haven and Sesh remain planned
+dependencies. R5 applications are intended consumers.
 
-**No service behavior is implemented yet.** The repository holds its constitution
-link, lawbook, LICENSE and ignore list — no source or tests. The workspace now has
-a source-conditional target registrar; because `src/` is empty, it emits no library
-or test target. Everything below is specified intent, not delivered behavior.
+**A first offline service slice is implemented and its registered owner test has
+passed on macOS arm64.** `src/service/service.{h,c}` owns one engine `Database`, registers a
+private admin row before startup load, bootstraps the one-time `admin` /
+`Password123!` credential, and requires password + TOTP for login. Startup keeps
+request admission closed; the bootstrap password must be replaced before an
+admin may explicitly enable admission. TOTP replay state and the enable preference
+are written through the engine's current snapshot API before the corresponding
+operation succeeds. A borrowed secure-secret callback seam has no plaintext
+fallback; platform Keychain integration is not implemented here.
 
-Specified, not built: the connection descriptor (endpoint + credential + database),
-the session model (access token in RAM, durable refresh token), per-request
-verification, the request/send framing with an injected transport seam, and the admin
-operations (create database, create entity, add user, browse catalog).
+The service currently exposes only an in-process admission boolean, not a network
+listener, request framing, per-client sessions/tokens, CRUD dispatcher, triggers,
+or durable audit. TOTP/password/admin policy data currently shares the legacy
+snapshot; the specified WAL-backed mutation/audit path is not integrated. The
+owner test exercises bootstrap, login, replay, password-change gating and restart
+using an in-memory fake secret store. Save/load failure injection, diagnostic
+assertions, sanitizers and live Keychain proof remain outstanding.
+
+Still planned: connection descriptors; access/refresh session tokens and per-request
+authorization; request/send framing with injected transport; admin catalog operations;
+CRUD, triggers and redacted durable audit; entity-scoped permissions, sensitive-field
+gating, elevation and step-up, TOTP enrolment/recovery codes.
 
 ## Scope and Limitations
 
-- **Covers:** the service surface — who is connected, what they may do, how a request
-  is framed and answered, and the transport seam. It is the surface *every* darkbase
-  client talks to.
+- **Covers today:** service-owned database startup/load, one admin bootstrap/login,
+  TOTP replay watermark, forced password replacement and explicit process-local
+  request admission. The broader service surface is future work.
 - **Does not cover:** the store itself (pages, log, catalog — that is `darkbase-engine`,
-  R3); any UI (that is the R5 client); and no wire protocol is implemented yet.
+  R3); any UI (that is the R5 client); network transport, client sessions, CRUD,
+  triggers or WAL-backed audit. Headless is currently offline and has no wire protocol.
 - **The one rule to keep it honest:** a **client never opens the file** — not even on
   the same machine. The moment a UI reads a `.vexdb` directly, the UI's lifetime owns
   the store's and this repository's reason to exist disappears.
-- **Platform:** unproven. macOS arm64 is the only lab; Windows and Linux are untested.
+- **Platform:** the registered offline owner passed on macOS arm64. Windows and Linux
+  runtime behavior is untested; live platform secret-store behavior is unproved.
 - **Lawbook:** [`darkbase-headless-preferences.md`](darkbase-headless-preferences.md).
