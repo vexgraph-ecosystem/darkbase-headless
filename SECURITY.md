@@ -11,17 +11,30 @@ never learns what a session is.
 
 ## Secrets
 
-- **A password is never stored.** Only a salted, deliberately slow hash, borrowed
-  from the R2 crypto contract — never an invented one.
-- A refresh token is stored **only as a hash**. An access token lives in RAM,
-  dies with the process, and is an opaque value, never a pointer.
-- The **TOTP secret is recoverable by the service** (unlike a password hash), so
-  the store is part of the trust boundary: it is stored encrypted, with the key
-  held outside the database file, and that is stated wherever this is described.
-- Tokens and credential material never appear in a log, diagnostic or `toString`
+- **A password is never stored** — verified: PBKDF2-SHA256 over a random salt
+  with the derivation cost recorded beside the hash (`passwordSalt`,
+  `passwordHash`, `iterations`). There is no plaintext path.
+- **The TOTP secret never lands in the database file** — it crosses an injected
+  secret-store seam. The service *requires* that seam to be backed by secure OS
+  storage with the key outside the database; the service does not encrypt it
+  itself, so that guarantee is only as strong as the host's store, and Keychain
+  integration is unproved.
+- **Per-client tokens are NOT implemented.** `refresh` appears nowhere in `src/`:
+  a process-local authenticated boolean is not a client session and not network
+  authorization. The Session Token Law describes the target, not the current
+  state.
+- Credential material never appears in a log, diagnostic or `toString`
   projection, and comparison of secret material does not early-exit.
 
-## Authorization
+## Authorization — the model, and what actually exists
+
+**Implemented today:** one-time bootstrap, password + TOTP login, **TOTP replay
+rejection** (a durable `lastTotpStep` watermark), forced password replacement, and
+an explicit request-gate enable/disable.
+
+**Required, not yet implemented:** entity-scoped grants, step-up for destructive
+operations, time-boxed elevation, sensitive-field enforcement and per-client
+sessions. The model those must satisfy, when they land:
 
 - **Entity-scoped grants.** A role is a label with no rights of its own; a grant
   is `(role, entity, rights)` and is the only place a permission lives. Deny by
@@ -33,18 +46,25 @@ never learns what a session is.
 - **Elevation is time-boxed** (default 15 minutes, per-session) and needs
   password plus authenticator. Enrolment is itself gated by the password —
   otherwise a stolen session could permanently own step-up.
-- **TOTP replay is rejected** within a bounded window, and the last accepted
-  timestep is remembered per user.
 
-## Failed attempts are throttled and counted
+Until those exist, this service authenticates but does not yet authorize.
 
-Repeated failures are rate-limited and auditable, and a burst is a signal rather
-than noise. A security-motivated delay at such a site is marked
-`;;FREEZE("bound, identity")` and obeys all six rules in
-`annotation/security.h`: cold path only, bounded by a named constant whose
-ceiling a test asserts, never holding a lock, never inside a loop whose count
-comes from the request, always paired with a counter, and never a substitute for
-the access check itself.
+## Failed attempts are NOT yet throttled
+
+**Verified against the implementation:** repeated failures are **not**
+rate-limited, not counted and not delayed. `HeadlessService_adminLogin` rejects
+with a diagnostic and nothing else — there is no counter, no lockout and no
+backoff anywhere in `src/`. A burst of guesses is currently indistinguishable
+from a burst of typos.
+
+That is a **required gap, not a description**. When it lands it is the first
+honest `;;FREEZE` site in the ecosystem: a security-motivated delay marked
+`;;FREEZE("bound, identity")`, obeying all six rules in `annotation/security.h`
+— cold path only, bounded by a named constant whose ceiling a test asserts,
+never holding a lock, never inside a loop whose count comes from the request,
+always paired with a counted refusal, and never a substitute for the access
+check. Until then, no rate limiting may be claimed for this service, here or
+anywhere it is described.
 
 ## Transport
 
