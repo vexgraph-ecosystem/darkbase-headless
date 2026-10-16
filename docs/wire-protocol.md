@@ -80,7 +80,7 @@ through lifecycle operations, not raw field setters.
 ## Scope and Limitations
 
 The registered C owner is
-`tests/darkbase-headless/protocol/headless_protocol_test.c`; the independent runner
+`../../../../tests/darkbase-headless/protocol/headless_protocol_test.c`; the independent runner
 is `python3 tests/darkbase-headless/protocol_run.py`. Tests exercise the byte oracle,
 every split point, byte-at-a-time responses, coalesced tail retention, busy
 preservation, all response statuses, header rejection, every incomplete EOF,

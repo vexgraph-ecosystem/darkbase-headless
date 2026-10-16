@@ -1,6 +1,6 @@
 # darkbase-headless — the R4 darkbase service
 
-The headless service for [darkbase-engine](../../drivers/darkbase-engine): it owns
+The headless service for [darkbase-engine](../darkbase-engine): it owns
 database startup and file access, one admin's bootstrap/authentication and the
 current process-local request gate. The wire envelope exists; sessions, transport
 driving and request execution remain planned. The graphical/TUI application is a **client of this**, not a second owner
