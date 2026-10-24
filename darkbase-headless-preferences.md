@@ -3,9 +3,12 @@
 ## Constitution Link
 
 The complete [constitution](https://gist.github.com/vex-graph/4132a6c45cb6d3797c3e8eff2e94035a)
-governs this repository. Workspace source: `../../gist/PREFERENCES.md`.
-Read it first, then this file, `../../tests/test-preferences.md`, the current
-`../../gist/test-checklist.md`, and the actual implementation.
+governs this repository. The binding law list is `gist.md`
+(`../../../metadata/gists/preferences/gist.md`); `../../../PREFERENCES.md` is its full
+rationale and is never ingested whole. Read the law first, then this file, the proof
+lawbook `../../../tests/test-preferences.md` (slice one law with
+`./tools/prefs test "<title>"`), the evidence ledger
+`../../../metadata/gists/test-checklist.md`, and the actual implementation.
 
 ## Law Index (Binding Matrix)
 
@@ -227,7 +230,7 @@ closed at startup; one-time bootstrap, password + TOTP login, TOTP replay-step
 persistence, forced password replacement and explicit request-gate enable/disable.
 The TOTP secret crosses a borrowed secret-store callback only; that callback must
 be backed by secure OS storage, no plaintext fallback. Registered owner
-`../../tests/darkbase-headless/service/service_test.c` passed on macOS arm64
+`../../../tests/darkbase-headless/service/service_test.c` passed on macOS arm64
 through the workspace graph; claims are scoped to that test, and save/load failure
 injection and Keychain behavior are unproved.
 
