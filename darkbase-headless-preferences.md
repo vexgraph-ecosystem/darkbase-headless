@@ -4,7 +4,7 @@
 
 The complete [constitution](https://gist.github.com/vex-graph/4132a6c45cb6d3797c3e8eff2e94035a)
 governs this repository. The binding law list is `gist.md`
-(`../../../metadata/gists/preferences/gist.md`); `../../../PREFERENCES.md` is its full
+(`../../../metadata/gists/preferences/gist.md`); `../../../metadata/gists/preferences/PREFERENCES.md` is its full
 rationale and is never ingested whole. Read the law first, then this file, the proof
 lawbook `../../../tests/test-preferences.md` (slice one law with
 `./tools/prefs test "<title>"`), the evidence ledger
